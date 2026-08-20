@@ -1,142 +1,141 @@
-# MERN Kit — without Docker
+# MERN Kit — with Docker
 
-A production-minded **MongoDB · Express · React · Node** starter for local development.
+Production-minded **MongoDB · Express · React · Node** starter with first-class Docker support.
 
-Not a toy counter demo. You get auth, owned resources, validation, security headers, and a structured React client you can grow into a real app.
+Same app as `mern-without-docker`, plus containerized MongoDB, API, and client for one-command local/prod-like runs.
 
-## What's included
+## Stack
 
-### Backend (`server/`)
-- JWT auth (register / login / logout / me) with httpOnly cookie + Bearer token
-- Password hashing with bcrypt
-- Protected item CRUD scoped per user
-- `express-validator` request validation
-- Helmet, CORS credentials, rate limiting, HPP, mongo injection sanitization
-- Central `AppError` + async handler + consistent JSON errors
-- Pagination, search, and completed filter on items
-- Env validation on boot + graceful shutdown
+| Layer | Tech |
+|-------|------|
+| Client | React + Vite (nginx in production images) |
+| API | Express + JWT auth + validation + security middleware |
+| DB | MongoDB 7 |
+| Orchestration | Docker Compose (prod + hot-reload dev) |
 
-### Frontend (`client/`)
-- Vite + React
-- React Router (public / protected / guest-only routes)
-- Auth context with session bootstrap
-- Axios API layer (`withCredentials` + Bearer header)
-- Landing, login, register, and dashboard with search/filters
-- Clean, distinctive UI (not a generic purple template)
+## Quick start (Docker)
 
-## Quick start
+### Prerequisites
+- Docker Desktop / Docker Engine + Compose plugin
 
-### 1. Prerequisites
-- Node.js 18+
-- MongoDB running locally, or a MongoDB Atlas URI
-
-### 2. Install
+### 1. Env
 
 ```bash
-git clone -b mern-without-docker https://github.com/sheikhali425/bioler-plates.git my-mern-app
-cd my-mern-app
-
-cp server/.env.example server/.env
-# set MONGODB_URI and a strong JWT_SECRET
-
-npm run install:all
+cp .env.example .env
+# set a strong JWT_SECRET
 ```
 
-### 3. Run
+### 2. Production-like stack
 
 ```bash
-npm run dev
+npm run docker:up
+# or: docker compose --env-file .env up --build -d
 ```
 
 | Service | URL |
 |---------|-----|
-| Client | http://localhost:5173 |
-| API | http://localhost:5000 |
-| Health | http://localhost:5000/api/health |
+| App (nginx + React) | http://localhost:8080 |
+| API (direct) | http://localhost:5050 |
+| Health | http://localhost:5050/api/health |
+| MongoDB | localhost:27017 |
 
-Vite proxies `/api` → Express, so the browser only talks to `:5173`.
+Nginx proxies `/api` → the Express service, so the browser talks to one origin.
+
+```bash
+npm run docker:logs
+npm run docker:down
+```
+
+### 3. Dev stack (hot reload)
+
+```bash
+npm run docker:dev
+```
+
+| Service | URL |
+|---------|-----|
+| Vite client | http://localhost:5173 |
+| API | http://localhost:5050 |
+
+Source folders are bind-mounted; Nodemon + Vite HMR work inside containers.
+
+```bash
+npm run docker:dev:down
+```
+
+## Run without Docker (optional)
+
+Still supported on this branch:
+
+```bash
+cp server/.env.example server/.env
+# start local MongoDB, then:
+npm run install:all
+npm run dev
+```
 
 ## Project structure
 
 ```
 .
+├── docker-compose.yml       # prod-like: mongo + server + nginx client
+├── docker-compose.dev.yml   # hot reload: mongo + nodemon + vite
+├── .env.example             # compose variables (JWT, ports)
 ├── client/
-│   └── src/
-│       ├── api/           # axios client + auth/items endpoints
-│       ├── components/    # layout, guards, item UI
-│       ├── context/       # AuthProvider
-│       ├── pages/         # Home, Login, Register, Dashboard
-│       └── App.jsx
-├── server/
-│   └── src/
-│       ├── config/        # env + db
-│       ├── controllers/
-│       ├── middleware/    # auth, validate, errors
-│       ├── models/
-│       ├── routes/
-│       ├── utils/
-│       ├── validators/
-│       ├── app.js
-│       └── index.js
-└── package.json           # concurrently scripts
+│   ├── Dockerfile           # multi-stage Vite build → nginx
+│   ├── Dockerfile.dev
+│   └── nginx.conf           # SPA + /api proxy
+└── server/
+    ├── Dockerfile           # production Node image
+    └── Dockerfile.dev
 ```
 
-## API reference
+## Compose environment
 
-### Auth
-| Method | Path | Auth | Body |
-|--------|------|------|------|
-| POST | `/api/auth/register` | No | `{ name, email, password }` |
-| POST | `/api/auth/login` | No | `{ email, password }` |
-| POST | `/api/auth/logout` | No | — |
-| GET | `/api/auth/me` | Yes | — |
+Root `.env` (from `.env.example`):
 
-Password rules: min 8 chars, at least one letter and one number.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `JWT_SECRET` | required (prod) | Token signing key |
+| `JWT_EXPIRES_IN` | `7d` | Token lifetime |
+| `CLIENT_URL` | `http://localhost:8080` | CORS origin for API |
+| `CLIENT_PORT` | `8080` | Host port for nginx client |
+| `CLIENT_DEV_PORT` | `5173` | Host port for Vite |
+| `API_PORT` | `5050` | Host port for API |
+| `MONGO_PORT` | `27017` | Host port for MongoDB |
 
-### Items (all require auth)
-| Method | Path | Notes |
-|--------|------|-------|
-| GET | `/api/items` | Query: `page`, `limit`, `completed`, `q` |
-| POST | `/api/items` | `{ title, description? }` |
-| PUT | `/api/items/:id` | `{ title?, description?, completed? }` |
-| DELETE | `/api/items/:id` | Owner only |
+Inside Compose, the API uses `MONGODB_URI=mongodb://mongo:27017/mern_boilerplate`.
 
-### Health
-| Method | Path |
-|--------|------|
-| GET | `/api/health` |
+## What's included (app features)
 
-## Environment
+### Backend
+- JWT auth (register / login / logout / me) — cookie + Bearer
+- bcrypt passwords, user-owned items
+- Validation, Helmet, rate limits, HPP, mongo sanitize
+- Pagination, search, filters
+- Health checks used by Docker
 
-`server/.env`:
+### Frontend
+- React Router + auth guards
+- Auth context + axios API layer
+- Landing, login, register, dashboard
 
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `MONGODB_URI` | Yes | — | Mongo connection string |
-| `JWT_SECRET` | Yes | — | Sign tokens (use a long random value) |
-| `JWT_EXPIRES_IN` | No | `7d` | Token lifetime |
-| `PORT` | No | `5000` | API port |
-| `CLIENT_URL` | No | `http://localhost:5173` | CORS origin |
-| `NODE_ENV` | No | `development` | `production` enables stricter checks |
+## API (short)
 
-## Scripts
+| Area | Paths |
+|------|-------|
+| Auth | `POST /api/auth/register`, `login`, `logout`, `GET /api/auth/me` |
+| Items | `GET/POST /api/items`, `PUT/DELETE /api/items/:id` |
+| Health | `GET /api/health` |
+
+## Clone this branch
 
 ```bash
-npm run install:all   # root + server + client deps
-npm run dev           # API + React together
-npm run dev:server
-npm run dev:client
-npm run build         # production client build
-npm start             # run API only
+git clone -b mern-with-docker https://github.com/sheikhali425/bioler-plates.git my-mern-docker
+cd my-mern-docker
+cp .env.example .env
+npm run docker:up
 ```
-
-## Suggested next steps
-
-- Add roles / admin routes
-- Refresh tokens + stricter cookie CSRF
-- File uploads
-- Tests (Jest / Vitest + Supertest)
-- CI pipeline
 
 ## License
 
